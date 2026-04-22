@@ -27,8 +27,13 @@ public class Bike {
 
     // 👇 新增字段（和数据库对应）
 
+
     @Column(name = "parking_area_id")
     private Long parkingAreaId;
+
+    public Long getParkingAreaId() {
+        return parkingAreaId == null ? 0L : parkingAreaId;
+    }
 
     @Column(name = "fault_desc")
     private String faultDesc;

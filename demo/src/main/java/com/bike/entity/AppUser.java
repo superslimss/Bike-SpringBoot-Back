@@ -23,8 +23,6 @@ public class AppUser {
      */
     private String role;
 
-    private String nickname;
-
     private String phone;
 
     @Column(name = "create_time")
