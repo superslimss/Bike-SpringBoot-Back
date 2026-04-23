@@ -20,6 +20,7 @@ public class BikeOrder {
     private Double endLng;  // ? 对应前端传的 endLng
     private String rideTime; // ? 存储 "00:05:20" 这种格式
     private Integer status; 
+    private Long parkingAreaId; // 记录还车时的区域ID
     private Double startLat;
     private Double startLng;
 }
