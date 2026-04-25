@@ -20,7 +20,17 @@ public class BikeOrder {
     private Double endLng;  // ? 对应前端传的 endLng
     private String rideTime; // ? 存储 "00:05:20" 这种格式
     private Integer status; 
+    private Double fee; // 费用
     private Long parkingAreaId; // 记录还车时的区域ID
     private Double startLat;
     private Double startLng;
+
+    public void setFee(Double fee) {
+        this.fee = fee;
+    }
+
+    // ? 顺便加上 Getter
+    public Double getFee() {
+        return fee;
+    }
 }

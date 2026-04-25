@@ -59,12 +59,11 @@ public class OrderController {
         return ResponseEntity.ok(savedOrder);
     }
 
-    @PostMapping("/finish")
+@PostMapping("/finish")
     @Transactional
     public ResponseEntity<?> finishOrder(@RequestBody BikeOrder req) {
         return orderRepository.findById(req.getId()).map(order -> {
             // --- 1. 使用数组来绕过 Lambda 的 final 限制 ---
-            // result[0] 将用来存储判定出的区域 ID
             final Long[] result = { 0L };
 
             List<ParkingArea> areas = parkingAreaRepository.findAll();
@@ -82,7 +81,7 @@ public class OrderController {
                         }
                     }
                     if (!polygon.isEmpty() && GeoUtil.pointInPolygon(req.getEndLat(), req.getEndLng(), polygon)) {
-                        result[0] = area.getId(); // 修改数组内容是允许的
+                        result[0] = area.getId();
                         break;
                     }
                 } catch (Exception e) {
@@ -90,27 +89,44 @@ public class OrderController {
                 }
             }
 
-            // --- 2. 更新订单信息 ---
-            order.setStatus(1);
+            // --- 2. 核心计费逻辑 (阶梯计费) ---
             LocalDateTime now = LocalDateTime.now();
+            java.time.Duration duration = java.time.Duration.between(order.getStartTime(), now);
+            long seconds = duration.getSeconds();
+            
+            double fee = 0.0;
+            // 规则：前30秒免费，15分钟内2元，超过15分钟5元
+            if (seconds > 30) {
+                if (seconds <= 900) { // 15分钟 = 900秒
+                    fee = 2.0;
+                } else {
+                    fee = 5.0;
+                }
+            }
+            
+            // 违停规则：如果不在停车区 (result[0] == 0)，额外收10元
+            if (result[0] == 0L) {
+                fee += 10.0;
+            }
+
+            // --- 3. 更新订单信息 ---
+            order.setStatus(1);
             order.setEndTime(now);
             order.setEndLat(req.getEndLat());
             order.setEndLng(req.getEndLng());
-            order.setParkingAreaId(result[0]); // 存入订单表
+            order.setParkingAreaId(result[0]); 
+            order.setFee(fee); // 【新增】存入计算好的费用
 
-            java.time.Duration duration = java.time.Duration.between(order.getStartTime(), now);
-            long seconds = duration.getSeconds();
             String formattedTime = String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60);
             order.setRideTime(formattedTime);
             orderRepository.save(order);
 
-            // --- 3. 更新单车信息 ---
+            // --- 4. 更新单车信息 ---
             bikeRepository.findById(order.getBikeId()).ifPresent(bike -> {
                 bike.setLatitude(req.getEndLat());
                 bike.setLongitude(req.getEndLng());
                 bike.setStatus(0);
                 bike.setUpdateTime(now);
-                // 此时访问 result[0] 是完全合法的，因为 result 数组引用本身没变过
                 bike.setParkingAreaId(result[0]);
                 bikeRepository.save(bike);
             });
@@ -118,7 +134,6 @@ public class OrderController {
             return ResponseEntity.ok(order);
         }).orElse(ResponseEntity.notFound().build());
     }
-
     /**
      * 1. 查询指定用户的所有已完成订单
      * 用于“历史订单”列表页
