@@ -1,5 +1,8 @@
 package com.bike.controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.Optional; // 解决Optional报错
 import com.bike.entity.Bike;
 import com.bike.entity.BikeOrder;
 import com.bike.entity.ParkingArea;
@@ -38,28 +41,50 @@ public class OrderController {
     @PostMapping("/create")
     @Transactional
     public ResponseEntity<?> createOrder(@RequestBody BikeOrder order) {
-        // 打印一下前端传过来的 userId，方便调试
-        System.out.println("收到订单请求，用户ID为: " + order.getUserId());
+        System.out.println("接收到创建订单请求：userId=" + order.getUserId() + ", bikeId=" + order.getBikeId());
 
+        // 1. 基础参数校验
         if (order.getUserId() == null) {
             return ResponseEntity.badRequest().body("用户ID不能为空");
         }
+        if (order.getBikeId() == null) {
+            return ResponseEntity.badRequest().body("单车ID不能为空");
+        }
 
-        order.setStartTime(LocalDateTime.now());
-        order.setStatus(0); // 0 代表进行中
+        // 2. 查询单车（兼容NULL字段，不触发异常）
+        Optional<Bike> bikeOptional = bikeRepository.findById(order.getBikeId());
+        if (bikeOptional.isEmpty()) {
+            return ResponseEntity.badRequest().body("单车不存在");
+        }
+        Bike bike = bikeOptional.get();
 
-        BikeOrder savedOrder = orderRepository.save(order);
+        // 3. 校验单车状态（必须是可用状态 0）
+        if (bike.getStatus() != 0) {
+            return ResponseEntity.badRequest().body("单车已被使用或故障");
+        }
 
-        // 同时更新单车状态为使用中
-        bikeRepository.findById(order.getBikeId()).ifPresent(bike -> {
+        try {
+            // 4. 封装订单信息
+            order.setStartTime(LocalDateTime.now());
+            order.setStatus(0); // 订单状态：进行中
+
+            // 5. 保存订单
+            BikeOrder savedOrder = orderRepository.save(order);
+
+            // 6. 更新单车状态为使用中（完全兼容NULL字段）
             bike.setStatus(1);
             bikeRepository.save(bike);
-        });
 
-        return ResponseEntity.ok(savedOrder);
+            System.out.println("订单创建成功，订单ID：" + savedOrder.getId() + "，单车ID：" + order.getBikeId());
+            return ResponseEntity.ok(savedOrder);
+
+        } catch (Exception e) {
+            System.err.println("创建订单失败：" + e.getMessage());
+            return ResponseEntity.internalServerError().body("创建订单失败，请重试");
+        }
     }
 
-@PostMapping("/finish")
+    @PostMapping("/finish")
     @Transactional
     public ResponseEntity<?> finishOrder(@RequestBody BikeOrder req) {
         return orderRepository.findById(req.getId()).map(order -> {
@@ -93,7 +118,7 @@ public class OrderController {
             LocalDateTime now = LocalDateTime.now();
             java.time.Duration duration = java.time.Duration.between(order.getStartTime(), now);
             long seconds = duration.getSeconds();
-            
+
             double fee = 0.0;
             // 规则：前30秒免费，15分钟内2元，超过15分钟5元
             if (seconds > 30) {
@@ -103,7 +128,7 @@ public class OrderController {
                     fee = 5.0;
                 }
             }
-            
+
             // 违停规则：如果不在停车区 (result[0] == 0)，额外收10元
             if (result[0] == 0L) {
                 fee += 10.0;
@@ -114,7 +139,7 @@ public class OrderController {
             order.setEndTime(now);
             order.setEndLat(req.getEndLat());
             order.setEndLng(req.getEndLng());
-            order.setParkingAreaId(result[0]); 
+            order.setParkingAreaId(result[0]);
             order.setFee(fee); // 【新增】存入计算好的费用
 
             String formattedTime = String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60);
@@ -134,6 +159,7 @@ public class OrderController {
             return ResponseEntity.ok(order);
         }).orElse(ResponseEntity.notFound().build());
     }
+
     /**
      * 1. 查询指定用户的所有已完成订单
      * 用于“历史订单”列表页
