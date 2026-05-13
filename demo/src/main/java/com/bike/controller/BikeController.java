@@ -2,6 +2,8 @@ package com.bike.controller;
 
 import com.bike.entity.Bike;
 import com.bike.repository.BikeRepository;
+import com.bike.repository.ParkingAreaRepository;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import com.bike.dto.BikeDispatchDTO;
@@ -12,6 +14,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import com.bike.entity.ParkingArea;
+import com.bike.repository.ParkingAreaRepository;
+import com.bike.dto.BikeBatchDispatchDTO;
+
 import java.util.List;
 
 @RestController
@@ -21,6 +27,9 @@ public class BikeController {
 
     @Autowired
     private BikeRepository bikeRepository;
+
+    @Autowired
+    private ParkingAreaRepository parkingAreaRepository;
 
     // 小程序调用：GET http://localhost:8080/api/bikes/list
     @GetMapping("/list")
@@ -109,5 +118,72 @@ public class BikeController {
         result.put("code", 1);
         result.put("msg", "处理成功");
         return result;
+    }
+
+    @PutMapping("/admin/batchDispatch")
+    public Map<String, Object> batchDispatchBikes(@RequestBody BikeBatchDispatchDTO dto) {
+        Map<String, Object> result = new HashMap<>();
+
+        if (!"admin".equals(dto.getRole())) {
+            result.put("code", 0);
+            result.put("msg", "无权限操作");
+            return result;
+        }
+
+        if (dto.getBikeIds() == null || dto.getBikeIds().isEmpty()) {
+            result.put("code", 0);
+            result.put("msg", "请选择要调度的单车");
+            return result;
+        }
+
+        Optional<ParkingArea> optionalArea = parkingAreaRepository.findById(dto.getParkingAreaId());
+        if (optionalArea.isEmpty()) {
+            result.put("code", 0);
+            result.put("msg", "目标停车区不存在");
+            return result;
+        }
+
+        ParkingArea area = optionalArea.get();
+
+        if (area.getMinLat() == null || area.getMaxLat() == null ||
+                area.getMinLng() == null || area.getMaxLng() == null) {
+            result.put("code", 0);
+            result.put("msg", "停车区范围数据不完整");
+            return result;
+        }
+
+        List<Bike> bikes = bikeRepository.findAllById(dto.getBikeIds());
+
+        int successCount = 0;
+
+        for (Bike bike : bikes) {
+            // 使用中的车不调度
+            if (bike.getStatus() != null && bike.getStatus() == 1) {
+                continue;
+            }
+
+            double lat = area.getMinLat() + Math.random() * (area.getMaxLat() - area.getMinLat());
+            double lng = area.getMinLng() + Math.random() * (area.getMaxLng() - area.getMinLng());
+
+            bike.setLatitude(round6(lat));
+            bike.setLongitude(round6(lng));
+            bike.setParkingAreaId(area.getId());
+            bike.setLastDispatchTime(LocalDateTime.now());
+
+            // 调度后设为空闲
+            bike.setStatus(0);
+
+            bikeRepository.save(bike);
+            successCount++;
+        }
+
+        result.put("code", 1);
+        result.put("msg", "批量调度成功");
+        result.put("successCount", successCount);
+        return result;
+    }
+
+    private double round6(double value) {
+        return Math.round(value * 1000000.0) / 1000000.0;
     }
 }
