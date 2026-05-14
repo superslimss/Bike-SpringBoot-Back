@@ -67,6 +67,10 @@ public class OrderController {
             // 4. 封装订单信息
             order.setStartTime(LocalDateTime.now());
             order.setStatus(0); // 订单状态：进行中
+            if (order.getStartLat() != null && order.getStartLng() != null) {
+                order.setStartLat(round6(order.getStartLat()));
+                order.setStartLng(round6(order.getStartLng()));
+            }
 
             // 5. 保存订单
             BikeOrder savedOrder = orderRepository.save(order);
@@ -135,6 +139,8 @@ public class OrderController {
             }
 
             // --- 3. 更新订单信息 ---
+            double endLat = round6(req.getEndLat());
+            double endLng = round6(req.getEndLng());
             order.setStatus(1);
             order.setEndTime(now);
             order.setEndLat(req.getEndLat());
@@ -148,8 +154,8 @@ public class OrderController {
 
             // --- 4. 更新单车信息 ---
             bikeRepository.findById(order.getBikeId()).ifPresent(bike -> {
-                bike.setLatitude(req.getEndLat());
-                bike.setLongitude(req.getEndLng());
+                bike.setLatitude(endLat);
+                bike.setLongitude(endLng);
                 bike.setStatus(0);
                 bike.setUpdateTime(now);
                 bike.setParkingAreaId(result[0]);
@@ -180,5 +186,9 @@ public class OrderController {
         return orderRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    private double round6(double value) {
+        return Math.round(value * 1000000.0) / 1000000.0;
     }
 }

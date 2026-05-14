@@ -17,6 +17,7 @@ import java.util.Optional;
 import com.bike.entity.ParkingArea;
 import com.bike.repository.ParkingAreaRepository;
 import com.bike.dto.BikeBatchDispatchDTO;
+import com.bike.dto.BikeReportFaultDTO;
 
 import java.util.List;
 
@@ -180,6 +181,43 @@ public class BikeController {
         result.put("code", 1);
         result.put("msg", "批量调度成功");
         result.put("successCount", successCount);
+        return result;
+    }
+
+    @PutMapping("/reportFault")
+    public Map<String, Object> reportBikeFault(@RequestBody BikeReportFaultDTO dto) {
+        Map<String, Object> result = new HashMap<>();
+
+        if (dto.getBikeNo() == null || dto.getBikeNo().trim().isEmpty()) {
+            result.put("code", 0);
+            result.put("msg", "请输入单车编号");
+            return result;
+        }
+
+        Optional<Bike> optionalBike = bikeRepository.findByBikeNo(dto.getBikeNo());
+
+        if (optionalBike.isEmpty()) {
+            result.put("code", 0);
+            result.put("msg", "单车不存在");
+            return result;
+        }
+
+        Bike bike = optionalBike.get();
+
+        if (bike.getStatus() != null && bike.getStatus() == 1) {
+            result.put("code", 0);
+            result.put("msg", "单车正在使用中，暂不能上报故障");
+            return result;
+        }
+
+        bike.setStatus(2);
+        bike.setFaultDesc(dto.getFaultDesc());
+        bike.setUpdateTime(LocalDateTime.now());
+
+        bikeRepository.save(bike);
+
+        result.put("code", 1);
+        result.put("msg", "故障上报成功");
         return result;
     }
 
