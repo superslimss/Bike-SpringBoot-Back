@@ -141,12 +141,13 @@ public class OrderController {
             // --- 3. 更新订单信息 ---
             double endLat = round6(req.getEndLat());
             double endLng = round6(req.getEndLng());
+
             order.setStatus(1);
             order.setEndTime(now);
-            order.setEndLat(req.getEndLat());
-            order.setEndLng(req.getEndLng());
+            order.setEndLat(endLat);
+            order.setEndLng(endLng);
             order.setParkingAreaId(result[0]);
-            order.setFee(fee); // 【新增】存入计算好的费用
+            order.setFee(fee);
 
             String formattedTime = String.format("%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60);
             order.setRideTime(formattedTime);

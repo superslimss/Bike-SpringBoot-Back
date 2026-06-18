@@ -77,34 +77,47 @@ public class UserController {
     public Map<String, Object> register(@RequestBody AppUser newUser) {
         Map<String, Object> result = new HashMap<>();
 
-        // 1. 账号密码非空校验
+        // 1. 非空校验
         if (newUser.getUsername() == null || newUser.getUsername().trim().isEmpty() ||
-                newUser.getPassword() == null || newUser.getPassword().trim().isEmpty()) {
+                newUser.getPassword() == null || newUser.getPassword().trim().isEmpty() ||
+                newUser.getPhone() == null || newUser.getPhone().trim().isEmpty()) {
             result.put("code", 0);
-            result.put("msg", "账号或密码不能为空");
+            result.put("msg", "FORM_INCOMPLETE");
             return result;
         }
 
-        // 2. 检查用户名是否重复
-        Optional<AppUser> existingUser = appUserRepository.findByUsername(newUser.getUsername());
-        if (existingUser.isPresent()) {
+        // 2. 手机号格式校验
+        if (!newUser.getPhone().matches("^1[3-9]\\d{9}$")) {
             result.put("code", 0);
-            result.put("msg", "该用户名已被注册");
+            result.put("msg", "PHONE_INVALID");
             return result;
         }
 
-        // 3. 设置默认属性
-        newUser.setRole("user"); // 统一设定为普通用户
-        newUser.setCreateTime(LocalDateTime.now()); // 设置注册时间
+        // 3. 用户名重复
+        if (appUserRepository.existsByUsername(newUser.getUsername())) {
+            result.put("code", 0);
+            result.put("msg", "USERNAME_EXISTS");
+            return result;
+        }
 
-        // 4. 执行保存
+        // 4. 手机号重复
+        if (appUserRepository.existsByPhone(newUser.getPhone())) {
+            result.put("code", 0);
+            result.put("msg", "PHONE_EXISTS");
+            return result;
+        }
+
+        // 5. 默认属性
+        newUser.setRole("user");
+        newUser.setCreateTime(LocalDateTime.now());
+
         try {
             appUserRepository.save(newUser);
             result.put("code", 1);
-            result.put("msg", "注册成功");
+            result.put("msg", "SUCCESS");
         } catch (Exception e) {
             result.put("code", 0);
-            result.put("msg", "系统异常，注册失败");
+            result.put("msg", "REGISTER_FAILED");
         }
 
         return result;
